@@ -1,59 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Rain Gauge Dashboard</title>
+  <title>Rainfall Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: sans-serif;
-      background: #f0f4f7;
       text-align: center;
-      padding: 40px;
+      padding: 2rem;
+      background: #f4f7fa;
     }
-    .card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      margin: 20px auto;
-      width: 300px;
+    .value {
+      font-size: 2rem;
+      margin: 1rem;
+      color: #0077cc;
     }
-    h1 { font-size: 24px; }
-    .value { font-size: 48px; margin-top: 10px; color: #0077cc; }
+    canvas {
+      margin-top: 2rem;
+    }
   </style>
 </head>
 <body>
+  <h1>🌧️ Rain Gauge Dashboard</h1>
+  <p>Raw Count: <span id="raw">--</span></p>
+  <p>Rainfall (mm): <span id="mm">--</span></p>
 
-  <h1>🌧️ Rainfall Monitor</h1>
-
-  <div class="card">
-    <h2>Raw Count</h2>
-    <div class="value" id="raw">--</div>
-  </div>
-
-  <div class="card">
-    <h2>1h Rainfall (mm)</h2>
-    <div class="value" id="mm">--</div>
-  </div>
+  <canvas id="rainChart" width="600" height="300"></canvas>
 
   <script>
-    const authToken = "nHUlE0MkMjOVsudqLTebyuDdt6B49n3V";
-    const baseUrl = "https://blynk.cloud/external/api/get";
+    const token = "nHUlE0MkMjOVsudqLTebyuDdt6B49n3V";
+    const base = "https://blynk.cloud/external/api/get";
+
+    const ctx = document.getElementById('rainChart').getContext('2d');
+    const rainfallData = {
+      labels: [], // timestamps
+      datasets: [{
+        label: '1h Rainfall (mm)',
+        data: [],
+        backgroundColor: 'rgba(0, 123, 255, 0.3)',
+        borderColor: '#007bff',
+        borderWidth: 2,
+        tension: 0.2
+      }]
+    };
+
+    const config = {
+      type: 'line',
+      data: rainfallData,
+      options: {
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              displayFormats: {
+                minute: 'HH:mm:ss'
+              }
+            }
+          },
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    };
+
+    const chart = new Chart(ctx, config);
 
     async function fetchData() {
       try {
-        const raw = await fetch(`${baseUrl}?token=${authToken}&V1`);
-        const mm = await fetch(`${baseUrl}?token=${authToken}&V2`);
+        const [rawRes, mmRes] = await Promise.all([
+          fetch(`${base}?token=${token}&V1`),
+          fetch(`${base}?token=${token}&V2`)
+        ]);
 
-        document.getElementById('raw').innerText = await raw.text();
-        document.getElementById('mm').innerText = await mm.text();
-      } catch (error) {
-        console.error("Error fetching data:", error);
+        const raw = await rawRes.text();
+        const mm = parseFloat(await mmRes.text());
+
+        document.getElementById('raw').textContent = raw;
+        document.getElementById('mm').textContent = mm.toFixed(2);
+
+        const now = new Date();
+        rainfallData.labels.push(now);
+        rainfallData.datasets[0].data.push(mm);
+        chart.update();
+
+        // Limit to 20 data points
+        if (rainfallData.labels.length > 20) {
+          rainfallData.labels.shift();
+          rainfallData.datasets[0].data.shift();
+        }
+      } catch (err) {
+        console.error("Failed to fetch data:", err);
       }
     }
 
-    fetchData(); // initial fetch
-    setInterval(fetchData, 5000); // refresh every 5 seconds
+    fetchData();
+    setInterval(fetchData, 5000);
   </script>
-
 </body>
 </html>
